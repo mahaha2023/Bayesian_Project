@@ -1,0 +1,392 @@
+---
+title: "Projet Statistique bayésienne"
+author: "MAHAMAT HASSAN ISSA"
+date: "2023-08-12"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+library(MCMCpack)
+library(BMS)
+library(conflicted)
+library(corrplot)
+library(caret)
+library(tidyverse)
+require(stats)
+library(knitr)
+# Chargement de données
+d=read.csv("C:/Users/HP/Desktop/Module 2/Bayèsien/Projet/mutations2.csv",stringsAsFactors = F)
+D = d[,-c(1:5)]# Extraction des variables quantitatives.
+```
+
+# préparation des données
+
+```{r}
+#preparation des données:
+
+{
+  
+  d=read.csv("C:/Users/HP/Desktop/Module 2/Bayèsien/Projet/mutations2.csv",stringsAsFactors = F)
+  
+  d_noduplicate = d %>% distinct()
+  
+  y = d_noduplicate$Barre 
+  #mat X pour les coef: sans les variables catégorielles
+  X = as.matrix(d_noduplicate[,-c(1:6)])
+  
+  summary(lm(y~X))
+  betahat = (lm(y~X))$coefficients
+  residuals = lm(y~X)$residuals
+  s2 = t(residuals)%*%residuals
+  
+  
+  #on utilise laprior de Zelner: loi non informative de paramétre g
+  #pour simplifier les calculs on ajouter une colenne de 1 (pour l'intercepte)
+  X = cbind(1,X)
+  n = NROW(X)
+  
+}
+
+
+#glimpse(d)
+
+#levels(d$etablissement)
+
+
+#summary(d)
+
+```
+
+Le fichier mutation2.csv contient 23 variables et 516 individus. Les 5 premières variables sont qualitatives et renseignent l’établissement, les matières concernées et d’autres paramètres identifiants les établissements (ville, code, etc.). À noter que la variable établissement ne renseigne pas les établissements de façon unique, car plusieurs noms sont similaires pour des lycées de différentes communes. Dans la suite de l’étude, la variable code_etablissement sera utilisée comme référence.
+
+Les 18 variables suivantes sont numériques en renseignent les caractéristiques de chaque couple (établissement, matière), notamment les effectifs, taux de réussite et d’accès aux fillaires et la variable réponse Barre qui indique le nombre de points nécessaire pour une mutation dans un couple donné.
+
+```{r}
+#visualisation des données
+#boxplot
+par(mfrow = c(4,4))
+par(mar = rep(2,4))
+for (i in c(6:18)) {
+  boxplot(d[,i], main=colnames(d[i]), col=c("red","blue"))
+  
+}
+
+#histogramme
+
+par(mfrow = c(4,4))
+par(mar = rep(2,4))
+for (i in c(6:18)) {
+  hist(d[,i], main=colnames(d[i]), col=c("blue"))
+  
+}
+
+#visualisation des matières X établissements
+d %>%  distinct(code_etablissement) %>% summarise(nbmat = n())
+d %>%  distinct(Matiere) %>% summarise(nbmat = n())
+
+d_Graph = d
+
+NROW(levels(d_Graph$code_etablissement))
+
+d_Graph$ct = 1
+d_Graph$id = 1:NROW(d_Graph)
+
+glimpse(d)
+glimpse(d_Graph)
+
+d_Graph = d_Graph %>% spread(key = Matiere, value = ct)
+
+d_Graph  = d_Graph[-c(2:23)]
+d_Graph[is.na(d_Graph)] = 0
+
+d_Graph =d_Graph %>% group_by(code_etablissement) %>% summarise_all(sum)
+
+#summary(d_Graph)
+
+#107 etablissements alors que distinc etab
+
+d_Graph %>%  distinct(code_etablissement) %>% summarise(nbmat = n())
+
+d_Graph$code_etablissement = 1:NROW(d_Graph)
+
+#colnames(d_Graph)[2:NCOL(d_Graph)] = 1:(NCOL(d_Graph)-1)
+
+
+#generate graph data
+{
+  df_2dgraph = data.frame(
+    x = rep(0,107*36),
+    y = rep(0,107*36)) 
+  
+  count = 1
+  for (x in  1:107){
+    for (y in 2:36) {
+      if (d_Graph[x,y] > 0) {
+        for (nb in 1:as.numeric((d_Graph[x,y]))) {
+          df_2dgraph$x[count]=x
+          df_2dgraph$y[count]=y-.5
+          count = count +1
+        }
+        
+      }
+    }
+  }
+}
+filter <- dplyr::filter
+ggplot((df_2dgraph %>% filter(x!=0)), aes(x=x, y=y) ) +
+  geom_bin2d(binwidth = c(1, 1)) +
+  theme_classic()+
+  scale_y_continuous(breaks = 1:36 + .5,
+                     labels = c(colnames(d_Graph)[2:NCOL(d_Graph)],""))+
+  theme(panel.grid.major.y = element_line(colour = "black"),
+        panel.grid.major.x = element_line(colour = "grey")
+  )+
+  xlab(label = "Etablissement ID")+
+  ylab(label = "")+
+  labs(title = "Représentation des couples Matières / Etablissements")
+```
+
+
+Notre analyse porte sur 35 matières réparties dans 107 établissements. Ainsi les données ne contiennent pas toutes les matières pour chaque établissement.
+
+Le graphique ci-dessus illustre la répartition des couples Matières / Établissements.
+```{r}
+# Corrélation des variables
+corrplot(cor(D))
+cor(D$taux_reussite_attendu_serie_l, D$taux_acces_attendu_premiere_bac)
+cor(D$taux_acces_attendu_seconde_bac, D$taux_brut_de_reussite_total_series)
+cor(D$Barre, D$effectif_presents_serie_l)
+cor(D$effectif_presents_serie_l, D$taux_acces_attendu_premiere_bac)
+cor(D$taux_acces_brut_premiere_bac, D$effectif_presents_serie_es)
+```
+Corrélation des variables: on voit certaines variables sont fortement corrélées et d'autres moins corrélées. On observe dans sur le graphe ci-dessus généralement des corrélations presque positives.
+
+```{r}
+
+```
+
+
+
+
+
+
+##           Régression fréquentiste
+```{r}
+# régression fréquentiste
+
+y = d_noduplicate$Barre
+X = as.matrix(d_noduplicate[,-c(1:6)])
+X = cbind(1,X)
+dc = d_noduplicate[,-c(2:4)]
+glimpse(X)
+
+lm(y~X)
+
+```
+
+
+```{r}
+summary(lm(Barre~Matiere, data = dc ))
+```
+
+Le modèle avec la variable Matiere converge sur les variables numériques, en effet les matières sont présentes une fois par établissement et dans plusieurs établissements et donc cela résout les problèmes de corrélation.
+La variabilité de Barre est trop importante entre les matières.Cela se vérifie dans les scores Adjusted R-squared (0.1477) pour le modèle avec Matiere seulement  et  p-value: 2.634e-10.
+
+Le modèle avec seulement la variable Matiere fait ressortir que plusieurs matières ont un impact significatif sur la variable réponse. L’intercepté est également très significative.
+
+```{r}
+
+summary(lm(Barre~. -Matiere -code_etablissement, data = dc ))
+```
+le modèle avec variable numérique seulement est bien plus mauvais ,cela se vérifie dans les scores Adjusted R-squared (0.004397) et p-value: 0.319.
+
+```{r}
+summary(lm(Barre~code_etablissement+Matiere, data = dc ))
+```
+
+Lorsque la régression est effectuée sur code_etablissement et Matiere les p-valeur significatifs des établissements sont globalement moins nombreux et moins élevés.
+```{r}
+reg.f= lm(Barre ~ ., data=D)
+summary(reg.f)
+reg.f.aic = step(reg.f)
+summary(reg.f.aic)
+```
+
+En effectuant une sélection de variables par la fonction step et le critère de l’AIC:
+
+Lorsque l’ont inclus toutes les variables non catégorielles, le step sélection 2 variables: taux_acces_attendu_premiere_bac, taux_reussite_attendu_serie_l .
+
+Lorsque l’on regarde les coefficients, on constate que:
+
+L’intercepte est négative on pars donc d’une Barre négative, cependant le coefficient de taux_acces_attendu_premiere_bac est tellement importante que toutes les prédictions restent positives et celui avec la p-value (0.00104) la plus faible .
+```{r}
+```
+
+
+
+
+
+
+
+
+
+##                   Conclusion
+
+
+Avant d’effectuer la régression linéaire bayésienne, nous avons effectué une régression linéaire standard pour expliquer la variable Barre :
+
+La régression est faite sur toutes les variables numériques.
+Les variables Matiere et code_etablissement sont testés dans la régression, les autres variables sont redondantes ou n’apporte pas d’informations à ce stade.
+
+Cette première approche nous permet de voir que:
+
+Les modèles incluant code_etablissement ne convergent pas pour les variables numériques. Ce qui est normal, car toutes les variables numériques renseignent de paramètres d’effectif et de réussite propre à chaque établissement et donc complètement corrélés (toutes égales pour chaque établissement).
+
+Cependant certaines classes de code_etablissement (certains établissements) ont des p-valeur significatifs:
+
+Lorsque la régression est effectuée seulement sur code_etablissement : environ 10% des établissements ont une influence significative sur la variable réponse et certaine avec une p-valeur inférieur à 0.001.
+
+
+
+Le modèle avec la variable Matiere converge sur les variables numériques, en effet les matières sont présentes une fois par établissement et dans plusieurs établissements et donc cela résout les problèmes de corrélation.
+
+Le modèle avec seulement la variable Matiere fait ressortir que plusieurs matières ont un impact significatif sur la variable réponse. L’intercepté est également très significative.
+
+Dans le modèle avec les variables numériques en plus, le type de matière est moins un peu souvent significatif, mais reste globalement plutôt similaire. Le modèle avec seulement les variables numérique cherche donc à expliquer la variable réponse uniquement avec les caractéristiques des établissements. Seulement 4 variables sont un peu significatives (p-valeur entre 5 et 10%).
+
+On comprend bien qu’étant donnée l’influence de certaines matières sur la variable réponse, une régression seulement sur les caractéristiques numériques des établissements ne permet pas d’obtenir de modèle satisfaisant. La variabilité de Barre est trop importante entre les matières.
+Cela se vérifie dans les scores Adjusted R-squared proche pour le modèle avec Matiere seulement (0.1477) et le modèle avec Matiere et variables numériques (0.1574); le modèle avec variable numérique seulement est bien plus mauvais (0.004397).
+
+Pour la suite on commencera donc à l’intéresser à la distribution de l’estimateur de la variable Barre grâce à la statistique Bayésienne. Dans un premier temps de façon générale, seulement grâce aux variables numériques afin d’obtenir plus d’information sur la dispersion de la variable lorsque l’ont le considère pas de matières ou établissement en particulier. Ensuite sur certaines matières en particulier afin de mieux comprendre les subtilités et l’influence des covaraibles numérique.
+
+En effectuant une sélection de variables par la fonction step et le critère de l’AIC
+Lorsque l’ont inclus toutes les variables non catégorielles, le step sélection 2 variables: taux_acces_attendu_premiere_bac, taux_reussite_attendu_serie_l .
+
+Lorsque l’on regarde les coefficients, on constate que:
+
+L’intercepte est négative on pars donc d’une Barre négative, cependant le coefficient de taux_acces_attendu_premiere_bac est tellement importante que toutes les prédictions restent positives et celui avec la p-value (0.00104) la plus faible .
+```{r}
+
+```
+
+
+
+
+
+
+
+##        Régression linéaire Bayésienne.
+```{r}
+# regression linéaire Bayésienne.
+
+reg = MCMCregress(Barre ~ ., data=D)
+summary(reg)
+plot(reg[, 13:18])
+raftery.diag(reg)
+effectiveSize(reg)
+```
+
+raftery.diag:indique il nous faut au minimum 3746 itérations.
+On a fait 10000 itérations .
+Donc c'est bon en terme de nombre d'itérations.
+
+Au niveau de taille effective de l'échantillon on est bon aussi.
+
+```{r}
+modBMS = bms(X.data=D, burn=1e4, iter=5e4)
+coef(modBMS)
+image(modBMS)
+topmodels.bma(modBMS)[, 1:18]
+
+
+```
+
+
+
+On remarque que les 3 variables qui ont les probabilités marginales d’inclusion les plus fortes:
+
+taux_acces_attendu_premiere_bac   PIP= 0.18008  
+taux_acces_attendu_seconde_bac    PIP=0.09750  
+taux_reussite_attendu_serie_s     PIP=0.06336
+
+En ce qui concerne le choix de modèle :je fait le choix de modèle qui inclue  uniquement la variable(taux_acces_attendu_premiere_bac   PIP= 0.18008 ).
+
+
+```{r}
+```
+
+#       Comparaison avec le modèle fréquentiste
+```{r}
+```
+
+En effectuant une sélection de variables par la fonction step et le critère de l’AIC:
+
+lorsque l’ont inclus toutes les variables non catégorielles, le step sélectionne 2 variables: taux_acces_attendu_premiere_bac, taux_reussite_attendu_serie_l .
+
+En détail :
+Lorsque l’on regarde les coefficients, on constate que:
+
+L’intercepte est négative on pars donc d’une Barre négative, cependant le coefficient de taux_acces_attendu_premiere_bac est tellement importante que toutes les prédictions restent positives.
+
+Le coeficient de taux_reussite_attendu_serie_l est négatif. Ce qui laisse penser que la Barre d’accès diminue losque l’établissement à un meilleur taux de réussite pour la section L. 
+
+Finalement on constate que taux_acces_attendu_premiere_bac qui est la variable donc le coefficient et les plus vraisemblablement différents de 0 avec l’approche Bayésienne est également celui avec la p-value la plus faible (0.00104) pour la sélection de variables du modèle linéaire avec le step et l’AIC.
+
+
+
+```{r}
+```
+
+
+
+#                Mutations en mathématiques et anglais
+```{r}
+
+```
+Ces matières sont parmi celles les plus représentés dans le jeu de données avec respectivement 52 et 59 individus (établissements) pour l’Anglais et la Mathématiques. Parmi ceux-ci, 31 Matiere sont issues du même établissement.
+```{r}
+#  les mutations en math et anglais.
+
+d_AN =  d_noduplicate[,-c(1:4)] %>% filter(Matiere == "ANGLAIS")
+d_AN = d_AN[,-1]
+modMCMC_Ang = MCMCregress(Barre ~ ., data=d_AN)
+summary(modMCMC_Ang)
+par(mfrow=c(6,3))
+plot(modMCMC_Ang[, 13:18])
+
+raftery.diag(modMCMC_Ang)
+effectiveSize(modMCMC_Ang)
+
+
+
+
+
+```
+
+
+```{r}
+d_MA =  d_noduplicate[,-c(1:4)] %>% filter(Matiere == "MATHS")
+d_MA = d_MA[,-1]
+
+modMCMC_MA = MCMCregress(Barre ~ ., data=d_MA)
+summary(modMCMC_MA)
+plot(modMCMC_MA[, 13:18])
+raftery.diag(modMCMC_MA)
+effectiveSize(modMCMC_MA)
+
+
+```
+##        Conclusion
+En comparant les coefficients trouvés, on constate que:
+
+Certaines variables ont des coefficients relativement proches avec des valeurs proches et le même signe.
+
+Certaines variables sont du même signe, mais avec des valeurs de coefficients assez éloignés.
+
+Certaines variables ont des coefficients de signes opposés.
+
+Ainsi on peut conclure que les covariables agissent de manière différente pour ces deux disciplines. Surtout pour les variables avec des coefficients de signes opposés.
+
+
